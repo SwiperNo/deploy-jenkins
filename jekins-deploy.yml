@@ -1,0 +1,68 @@
+---
+- name: Setup Jenkins
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Determine the operating system
+      ansible.builtin.setup:
+        filter: ansible_distribution
+
+    - name: Install Jenkins on Debian-based systems
+      block:
+        - name: Download Jenkins GPG key
+          ansible.builtin.get_url:
+            url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+            dest: /usr/share/keyrings/jenkins-keyring.asc
+            mode: '0644'
+
+        - name: Add Jenkins repository
+          ansible.builtin.apt_repository:
+            repo: 'deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/'
+            state: present
+            filename: 'jenkins'
+
+        - name: Update apt cache
+          ansible.builtin.apt:
+            update_cache: yes
+
+        - name: Install Jenkins
+          ansible.builtin.apt:
+            name: jenkins
+            state: present
+      when: ansible_distribution in ['Ubuntu', 'Debian']
+
+    - name: Install Jenkins on RHEL-based systems
+      block:
+        - name: Download Jenkins repo file
+          ansible.builtin.get_url:
+            url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+            dest: /etc/yum.repos.d/jenkins.repo
+            mode: '0644'
+
+        - name: Import Jenkins GPG key
+          ansible.builtin.rpm_key:
+            key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+            state: present
+
+        - name: Upgrade all packages
+          ansible.builtin.yum:
+            name: '*'
+            state: latest
+
+        - name: Install required dependencies for Jenkins
+          ansible.builtin.yum:
+            name:
+              - fontconfig
+              - java-17-openjdk
+            state: present
+
+        - name: Install Jenkins
+          ansible.builtin.yum:
+            name: jenkins
+            state: present
+
+        - name: Reload systemd to recognize Jenkins service
+          ansible.builtin.systemd:
+            daemon_reload: yes
+      when: ansible_distribution in ['RedHat', 'CentOS']
